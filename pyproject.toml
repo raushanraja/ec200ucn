@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "xiaotest"
+version = "0.1.0"
+description = ""
+authors = ["raushanraja <vraushanraja@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+platformio = "^6.1.11"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
