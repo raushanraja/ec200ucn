@@ -23,6 +23,7 @@ private:
     bool waitForResponse(const char* expectedResponse);
     bool waitForResponse(const char* expectedResponse, unsigned long timeout);
     bool executeCommand(const char* command, const char* expectedResponse);
+    bool executeCommand(const char* command, const char* expectedResponse, unsigned long timeout);
 };
 
 #endif
