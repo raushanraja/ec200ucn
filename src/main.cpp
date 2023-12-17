@@ -10,6 +10,11 @@
 
 #define PrintATSerailResponse 0
 
+#define IO_USERNAME "CHANGEME"
+#define IO_KEY "CHANGEME"
+#define MQTT_HOST "io.adafruit.com"
+#define MQTT_PORT 1883
+
 // Function prototypes
 void task1(void *parameter);
 void task2(void *parameter);
@@ -25,7 +30,10 @@ enum LastATCommand
 {
   AT,
   QMTCGF,
-  QMTOPEN
+  QMTOPEN,
+  QMTCONN,
+  QMTDISC,
+  QMTCLOSE,
 };
 
 LastATCommand lastATCommand = AT;
@@ -37,6 +45,32 @@ struct QueueData
 };
 
 bool task2Started = false;
+
+void openConnection()
+{
+  Serial.println("Opening connection");
+  ATSerial.println(mqttClient.openNetwork(0, MQTT_HOST, MQTT_PORT));
+}
+
+void closeConnection()
+{
+  Serial.println("Closing connection");
+  lastATCommand = QMTCLOSE;
+  ATSerial.println(mqttClient.closeConnection(0));
+}
+
+void connectClient()
+{
+  Serial.println("Connecting client");
+  ATSerial.println(mqttClient.connClient(0, "U1", IO_USERNAME, IO_KEY));
+}
+
+void disconnectClient()
+{
+  Serial.println("Disconnecting client");
+  ATSerial.println(mqttClient.disconnectClient(0));
+}
+
 void processQMTSTAT(String message)
 {
   // format +QMTSTAT: <client_id>,<err_code>
@@ -48,6 +82,8 @@ void processQMTSTAT(String message)
   if (err_code == "1")
   {
     Serial.println("Connection closed by peer, re-open the connection using +QMTOPEN");
+    lastATCommand = QMTOPEN;
+    openConnection();
   }
   else if (err_code == "2")
   {
@@ -90,6 +126,8 @@ void processQMTOPEN(String message)
   if (result == "0")
   {
     Serial.println("Network opened successfully");
+    lastATCommand = QMTCONN;
+    connectClient();
   }
   else if (result == "1")
   {
@@ -98,6 +136,8 @@ void processQMTOPEN(String message)
   else if (result == "2")
   {
     Serial.println("MQTT identifier is occupied");
+    lastATCommand = QMTDISC;
+    disconnectClient();
   }
   else if (result == "3")
   {
@@ -114,6 +154,110 @@ void processQMTOPEN(String message)
   else if (result == "-1")
   {
     Serial.println("Failed to open network");
+  }
+  else
+  {
+    Serial.println("Unknown error");
+  }
+}
+
+void processQMTCLOSE(String message)
+{
+  Serial.println("Received +QMTCLOSE from Task 1 via Queue 1");
+  // format: +QMTCLOSE: <client_id>,<result>
+  int pos = message.indexOf(",");
+  String client_id = message.substring(0, pos);
+  String result = message.substring(pos + 1, message.length() - 1);
+
+  if (result == "0")
+  {
+    Serial.println("Connection closed");
+    openConnection();
+  }
+  else if (result == "-1")
+  {
+    Serial.println("Failed to close connection");
+  }
+  else
+  {
+    Serial.println("Unknown error");
+  }
+}
+
+void processQMTCONNRET(String ret_code)
+{
+  if (ret_code == "0")
+  {
+    Serial.println("Connection Accepted");
+  }
+  else if (ret_code == "1")
+  {
+    Serial.println("Unacceptable Protocol Version");
+  }
+  else if (ret_code == "2")
+  {
+    Serial.println("Identifier Rejected");
+  }
+  else if (ret_code == "3")
+  {
+    Serial.println("Server Unavailable");
+  }
+  else if (ret_code == "4")
+  {
+    Serial.println("Bad User Name or Password");
+  }
+  else if (ret_code == "5")
+  {
+    Serial.println("Not Authorized");
+  }
+}
+void processQMTCONN(String message)
+{
+  Serial.println("Received +QMTCONN from Task 1 via Queue 1");
+  // format: +QMTCONN: <client_idx>,<result>,<ret_code>
+  int pos = message.indexOf(",");
+  int pos2 = message.indexOf(",", pos + 1);
+  String client_idx = message.substring(0, pos);
+  String result = message.substring(pos + 1, pos2);
+  String ret_code = message.substring(pos2 + 1, message.length() - 1);
+
+  if (result == "0")
+  {
+    Serial.println("Connection successful");
+  }
+  else if (result == "1")
+  {
+    Serial.println("Packet retransmission");
+  }
+  else if (result == "2")
+  {
+    Serial.println("Failed to send packet");
+  }
+  else
+  {
+    Serial.println("Unknown error");
+  }
+  if (ret_code.length() > 0)
+  {
+    processQMTCONNRET(ret_code);
+  }
+}
+
+void processQMTClientDisconnected(String message)
+{
+  Serial.println("Received +QMTDISC from Task 1 via Queue 1");
+  // format: +QMTDISC: <client_id>,<result>
+  int pos = message.indexOf(",");
+  String client_id = message.substring(0, pos);
+  String result = message.substring(pos + 1, message.length() - 1);
+  if (result == "0")
+  {
+    Serial.println("Connection closed");
+    closeConnection();
+  }
+  else if (result == "-1")
+  {
+    Serial.println("Failed to close connection");
   }
   else
   {
@@ -169,6 +313,7 @@ void task1(void *parameter)
   Serial.println("Task 1 started");
   // Add AT Ready Check to Queue 2 for Task 2 reference
   String readyCheck = "AT Ready Check";
+  String command = "";
   xQueueSend(queue2, &readyCheck, portMAX_DELAY);
 
   while (1)
@@ -195,17 +340,24 @@ void task1(void *parameter)
         case LastATCommand::AT:
           Serial.println("Received OK from Task 1 via Queue 1 for Sending AT");
           lastATCommand = LastATCommand::QMTCGF;
-          char command[50];
-          snprintf(command, sizeof(command), "AT+QMTCFG=\"version\",%d,%d", 0, 3);
-          ATSerial.println(command);
+          ATSerial.println(mqttClient.configureProtocolVersion(0, 3));
           break;
         case LastATCommand::QMTCGF:
           Serial.println("Received OK from Task 1 via Queue 1 for Sending QMTCGF");
           lastATCommand = LastATCommand::QMTOPEN;
-          ATSerial.println("AT+QMTOPEN=0,\"io.adafruit.com\",1883");
+          openConnection();
           break;
         case LastATCommand::QMTOPEN:
           Serial.println("Received OK from Task 1 via Queue 1 for Sending QMTOPEN");
+          lastATCommand = LastATCommand::QMTCONN;
+          break;
+        case LastATCommand::QMTCLOSE:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QMTCLOSE");
+          lastATCommand = LastATCommand::QMTOPEN;
+          openConnection();
+          break;
+        case LastATCommand::QMTDISC:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QMTDISC");
         default:
           break;
         }
@@ -214,6 +366,12 @@ void task1(void *parameter)
         processQMTOPEN(message);
       else if (message.startsWith("+QMTSTAT"))
         processQMTSTAT(message);
+      else if (message.startsWith("+QMTCONN"))
+        processQMTCONN(message);
+      else if (message.startsWith("+QMTDISC"))
+        processQMTClientDisconnected(message);
+      else if (message.startsWith("+QMTCLOSE"))
+        processQMTCLOSE(message);
       else
       {
         Serial.println("Received update from Task 2 via Queue 1: " + String(update.message));

@@ -1,21 +1,26 @@
 #include "mqtt.h"
 
-#define OPENNETWORKTO 120000 
+#define OPENNETWORKTO 120000
 #define CONNCLIENTTO 50000
 
-void MQTT::begin(uint32_t baudRate, uint8_t parity, uint8_t rxPin, uint8_t txPin) {
+void MQTT::begin(uint32_t baudRate, uint8_t parity, uint8_t rxPin, uint8_t txPin)
+{
     mqttSerial.begin(baudRate, parity, rxPin, txPin);
     Serial.println("MQTT: Serial communication started");
 }
 
-bool MQTT::waitForResponse(const char* expectedResponse) {
+bool MQTT::waitForResponse(const char *expectedResponse)
+{
     unsigned long startTime = millis();
     String response = "";
-    while (millis() - startTime < 3000) {
-        if (mqttSerial.available()) {
+    while (millis() - startTime < 3000)
+    {
+        if (mqttSerial.available())
+        {
             response = mqttSerial.readString();
         }
-        if (response.indexOf(expectedResponse) != -1) {
+        if (response.indexOf(expectedResponse) != -1)
+        {
             return true;
         }
     }
@@ -24,88 +29,113 @@ bool MQTT::waitForResponse(const char* expectedResponse) {
     return false;
 }
 
-bool MQTT::waitForResponse(const char* expectedResponse, unsigned long timeout) {
+bool MQTT::waitForResponse(const char *expectedResponse, unsigned long timeout)
+{
     unsigned long startTime = millis();
-    String response = "";
-    while (millis() - startTime < timeout) {
+    String response;
+
+    while (millis() - startTime < timeout)
+    {
         delay(100);
-        if (mqttSerial.available()) {
-            response = mqttSerial.readString();
-        }
-        if (response.indexOf(expectedResponse) != -1) {
-            return true;
-        }
-        else{
-            Serial.println("MQTT: Expected response not found");
+
+        if (mqttSerial.available())
+        {
+            response += mqttSerial.readString();
             Serial.println("Got response: " + response);
+            if (response.indexOf(expectedResponse) != -1)
+            {
+                return true;
+            }
+
+            // Check for known responses that may indicate an exit condition
+            const bool exit = handleKnownResponse(response);
+            if (exit)
+            {
+                return true;
+            }
         }
     }
+
     Serial.println("MQTT: Expected response not found");
     Serial.println("Got response: " + response);
     return false;
 }
 
-bool MQTT::executeCommand(const char* command, const char* expectedResponse) {
-    mqttSerial.println(command);
-    delay(500); // Give some time to process command
-    Serial.printf("MQTT: Sent command: %s\n", command);
-    return waitForResponse(expectedResponse);
+String MQTT::configureProtocolVersion(int clientIdx, int version)
+{
+    String command = "AT+QMTCFG=\"version\"," + String(clientIdx) + "," + String(version);
+    return command;
 }
 
-bool MQTT::executeCommand(const char* command, const char* expectedResponse, unsigned long timeout) {
-    mqttSerial.println(command);
-    delay(500); // Give some time to process command
-    Serial.printf("MQTT: Sent command: %s\n", command);
-    return waitForResponse(expectedResponse, timeout);
+String MQTT::openNetwork(int clientIdx, const char *hostName, int port)
+{
+    return "AT+QMTOPEN=" + String(clientIdx) + ",\"" + String(hostName) + "\"," + String(port);
 }
 
-void MQTT::configureProtocolVersion(int clientIdx, int version) {
-    char command[50];
-    snprintf(command, sizeof(command), "AT+QMTCFG=\"version\",%d,%d", clientIdx, version);
-    executeCommand(command, "OK");
-    Serial.println("MQTT: Protocol version configured");
+String MQTT::connClient(int clientIdx, const char *clientID, char *user, char *password)
+{
+    return "AT+QMTCONN=" + String(clientIdx) + ",\"" + String(clientID) + "\",\"" + String(user) + "\",\"" + String(password) + "\"";
 }
 
-void MQTT::openNetwork(int clientIdx, const char* hostName, int port) {
-    char command[70];
-    snprintf(command, sizeof(command), "AT+QMTOPEN=%d,\"%s\",%d", clientIdx, hostName, port);
-    executeCommand(command, "+QMTOPEN: 0,0", OPENNETWORKTO);
-    Serial.printf("MQTT: Network opened with host: %s, port: %d\n", hostName, port);
+String MQTT::subscribe(int clientIdx, int msgId, const char *topic, int qos)
+{
+    return "AT+QMTSUB=" + String(clientIdx) + "," + String(msgId) + ",\"" + String(topic) + "\"," + String(qos);
 }
 
-void MQTT::connClient(int clientIdx, const char* clientID, char* user, char* password) {
-    char command[100];
-    char expectedResponse[30];
-    snprintf(expectedResponse, sizeof(expectedResponse), "+QMTCONN: %d,0,0", clientIdx);
-    snprintf(command, sizeof(command), "AT+QMTCONN=%d,\"%s\",\"%s\",\"%s\"", clientIdx, clientID, user, password);
-    executeCommand(command, expectedResponse, CONNCLIENTTO);
-    Serial.printf("MQTT: Connected to client: %s\n", clientID);
+String MQTT::publish(int clientIdx, int msgId, int qos, int retained, const char *topic, const char *payload)
+{
+    return "AT+QMTPUB=" + String(clientIdx) + "," + String(msgId) + "," + String(qos) + "," + String(retained) + ",\"" + String(topic) + "\",\"" + String(payload) + "\"";
 }
 
-void MQTT::subscribe(int clientIdx, int msgId, const char* topic, int qos) {
-    char command[80];
-    snprintf(command, sizeof(command), "AT+QMTSUB=%d,%d,\"%s\",%d", clientIdx, msgId, topic, qos);
-    executeCommand(command, "+QMTSUB: 0,0,0");
-    Serial.printf("MQTT: Subscribed to topic: %s, qos: %d\n", topic, qos);
-}
-
-void MQTT::publish(int clientIdx, int msgId, int qos, int retained, const char* topic, const char* payload) {
-    char command[150];
-    snprintf(command, sizeof(command), "AT+QMTPUB=%d,%d,%d,%d,\"%s\",\"%s\"", clientIdx, msgId, qos, retained, topic, payload);
-    executeCommand(command, "+QMTPUB: 0,0,0");
-    Serial.printf("MQTT: Published message to topic: %s, payload: %s\n", topic, payload);
-}
-
-void MQTT::receiveMessage(int clientIdx, int recvId) {
+void MQTT::receiveMessage(int clientIdx, int recvId)
+{
     char command[40];
     snprintf(command, sizeof(command), "AT+QMTRECV=%d,%d", clientIdx, recvId);
-    executeCommand(command, "+QMTRECV");
+
     Serial.printf("MQTT: Received message with recvId: %d\n", recvId);
 }
 
-void MQTT::disconnect(int clientIdx) {
-    char command[30];
-    snprintf(command, sizeof(command), "AT+QMTDISC=%d", clientIdx);
-    executeCommand(command, "OK");
-    Serial.println("MQTT: Disconnected");
+String MQTT::disconnectClient(int clientIdx)
+{
+    return "AT+QMTDISC=" + String(clientIdx);
 }
+
+String MQTT::closeConnection(int clientIdx)
+{
+    return "AT+QMTCLOSE=" + String(clientIdx);
+}
+
+
+
+void MQTT::updateConnectedState(const bool connected)
+{
+    if (connected)
+    {
+        Serial.println("MQTT: Network connected");
+    }
+    else if (!connected)
+    {
+        Serial.println("MQTT: Network disconnected");
+    }
+    networkConnected = connected;
+}
+
+bool MQTT::handleKnownResponse(const String response)
+{
+    // Return false if response is empty
+    if (response.length() == 0)
+    {
+        return false;
+    }
+    else if (response.startsWith("+QMTOPEN") == 0)
+    {
+        Serial.println("MQTT: Open network response received");
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+// AT+QMTCFG=\"version\",%d,%d"
