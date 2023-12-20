@@ -12,8 +12,12 @@
 
 #define IO_USERNAME "CHANGEME"
 #define IO_KEY "CHANGEME"
-#define MQTT_HOST "io.adafruit.com"
+#define MQTT_HOST "CHANGEME.com"
 #define MQTT_PORT 1883
+
+#define clientIdx 0
+#define ssl_ctx_id 0
+#define SSL_CERT_NAME "hive"
 
 // Function prototypes
 void task1(void *parameter);
@@ -29,11 +33,21 @@ QueueHandle_t queue2;
 enum LastATCommand
 {
   AT,
-  QMTCGF,
+  QMTCFG_VERSION,
+  QMTCFG_SSLENABLE,
+  QMTCFG_RECV,
+  QSSLCFG_SSLVER,
+  QSSLCFG_CIPHER,
+  QSSLCFG_SECLEVEL,
+  QSSLCFG_CACERT,
+  QSSLCFG_IGNOREINVALID,
+  QSSLCFG_SNI,
   QMTOPEN,
   QMTCONN,
   QMTDISC,
   QMTCLOSE,
+  QMTSUB,
+  QMTPUBEX,
 };
 
 LastATCommand lastATCommand = AT;
@@ -70,6 +84,7 @@ void disconnectClient()
   Serial.println("Disconnecting client");
   ATSerial.println(mqttClient.disconnectClient(0));
 }
+
 
 void processQMTSTAT(String message)
 {
@@ -213,7 +228,7 @@ void processQMTCONNRET(String ret_code)
 }
 void processQMTCONN(String message)
 {
-  Serial.println("Received +QMTCONN from Task 1 via Queue 1");
+  Serial.println("Received +QMTCONN from Task 1 via Queue 1" + message);
   // format: +QMTCONN: <client_idx>,<result>,<ret_code>
   int pos = message.indexOf(",");
   int pos2 = message.indexOf(",", pos + 1);
@@ -221,9 +236,12 @@ void processQMTCONN(String message)
   String result = message.substring(pos + 1, pos2);
   String ret_code = message.substring(pos2 + 1, message.length() - 1);
 
+
   if (result == "0")
   {
     Serial.println("Connection successful");
+    lastATCommand = LastATCommand::QMTSUB;
+    ATSerial.println(mqttClient.subscribe(clientIdx, 1, "WaterPump",0));
   }
   else if (result == "1")
   {
@@ -237,10 +255,10 @@ void processQMTCONN(String message)
   {
     Serial.println("Unknown error");
   }
-  if (ret_code.length() > 0)
-  {
-    processQMTCONNRET(ret_code);
-  }
+  // if (ret_code.length() > 0)
+  // {
+  //   processQMTCONNRET(ret_code);
+  // }
 }
 
 void processQMTClientDisconnected(String message)
@@ -339,11 +357,51 @@ void task1(void *parameter)
         {
         case LastATCommand::AT:
           Serial.println("Received OK from Task 1 via Queue 1 for Sending AT");
-          lastATCommand = LastATCommand::QMTCGF;
-          ATSerial.println(mqttClient.configureProtocolVersion(0, 3));
+          lastATCommand = LastATCommand::QMTCFG_VERSION;
+          ATSerial.println(mqttClient.configureProtocolVersion(clientIdx, "3"));
           break;
-        case LastATCommand::QMTCGF:
-          Serial.println("Received OK from Task 1 via Queue 1 for Sending QMTCGF");
+        case LastATCommand::QMTCFG_VERSION:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QMTCFG");
+          lastATCommand = LastATCommand::QMTCFG_SSLENABLE;
+          ATSerial.println(mqttClient.configureSSLEnable(clientIdx, true, String(ssl_ctx_id)));
+          break;
+        case LastATCommand::QMTCFG_SSLENABLE:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QMTCFG");
+          lastATCommand = LastATCommand::QMTCFG_RECV;
+          ATSerial.println(mqttClient.configureRecvMode(clientIdx, "0", "1"));
+          break;
+        case LastATCommand::QMTCFG_RECV:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QMTCFG");
+          lastATCommand = LastATCommand::QSSLCFG_SSLVER;
+          ATSerial.println(mqttClient.configureSSLVersion(ssl_ctx_id, "4"));
+          break;
+        case LastATCommand::QSSLCFG_SSLVER:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QSSLCFG_SSLVER");
+          lastATCommand = LastATCommand::QSSLCFG_CIPHER;
+          ATSerial.println(mqttClient.configureSSLCipher(ssl_ctx_id, "0XFFFF"));
+          break;
+        case LastATCommand::QSSLCFG_CIPHER:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QSSLCFG_CIPHER");
+          lastATCommand = LastATCommand::QSSLCFG_SECLEVEL;
+          ATSerial.println(mqttClient.configureSSLSecLever(ssl_ctx_id, 0));
+          break;
+        case LastATCommand::QSSLCFG_SECLEVEL:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QSSLCFG_SECLEVEL");
+          lastATCommand = LastATCommand::QSSLCFG_CACERT;
+          ATSerial.println(mqttClient.configureSSLCert(ssl_ctx_id, SSL_CERT_NAME));
+          break;
+        case LastATCommand::QSSLCFG_CACERT:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QSSLCFG_CACERT");
+          lastATCommand = LastATCommand::QSSLCFG_IGNOREINVALID;
+          ATSerial.println(mqttClient.configureSSLIgnoreInValidCert(ssl_ctx_id, true));
+          break;
+        case LastATCommand::QSSLCFG_IGNOREINVALID:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QSSLCFG_IGNOREINVALID");
+          lastATCommand = LastATCommand::QSSLCFG_SNI;
+          ATSerial.println(mqttClient.configureSSLSNI(ssl_ctx_id, "1"));
+          break;
+        case LastATCommand::QSSLCFG_SNI:
+          Serial.println("Received OK from Task 1 via Queue 1 for Sending QSSLCFG_SNI");
           lastATCommand = LastATCommand::QMTOPEN;
           openConnection();
           break;
