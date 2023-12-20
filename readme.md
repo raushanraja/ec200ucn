@@ -23,3 +23,14 @@ platformio run --target upload
 #### Opening Serial port
 - Install minincom, `sudo pacman -S minicom` 
 - minicom -D /dev/ttyUSB0 -b 9600
+
+
+#### EC200UCN
+- Adding CA Root cert
+    - Used QFlash tool by Quectel
+    - Use command `AT+QFUPL="hive",1520`  
+        - "hive" - name where to save the cert, "1520" - size in byte
+        - replace the value accordingly
+    - In the QFlash UI, there is an option, where a file can be selected, select the CA file
+    - After entring the command `AT+QFUPL="hive", 1520`, We get an Ack that it's ready to recv data
+    - Send file option can be clicked to upload the CA File data, if successfull, we get an ACK otherwise we get an ERROR
