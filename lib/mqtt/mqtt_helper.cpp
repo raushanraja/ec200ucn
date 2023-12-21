@@ -1,4 +1,4 @@
-#include<mqtt_helper.h>
+#include <mqtt_helper.h>
 
 void openConnection()
 {
@@ -25,7 +25,8 @@ void disconnectClient()
   ATSerial.println(mqttClient.disconnectClient(0));
 }
 
-void processQMTRECV(String message){
+void processQMTRECV(String message)
+{
   int client_idx, recvId;
   char topic[40];
   int length;
@@ -37,10 +38,10 @@ void processQMTRECV(String message){
   snprintf(data, sizeof(data), "%s", data);
   Serial.printf("Client index: %d, recvId: %d, topic: %s, length: %d, data: %s\n", client_idx, recvId, topic, length, data);
 
-  if(String(data).startsWith("AT")){
+  if (String(data).startsWith("AT"))
+  {
     ATSerial.println(data);
   }
-
 }
 
 void processQMTSTAT(String message)
@@ -193,12 +194,11 @@ void processQMTCONN(String message)
   String result = message.substring(pos + 1, pos2);
   String ret_code = message.substring(pos2 + 1, message.length() - 1);
 
-
   if (result == "0")
   {
     Serial.println("Connection successful");
     lastATCommand = LastATCommand::QMTSUB;
-    ATSerial.println(mqttClient.subscribe(clientIdx, 1, "WaterPump",0));
+    ATSerial.println(mqttClient.subscribe(clientIdx, 1, "WaterPump", 0));
   }
   else if (result == "1")
   {
@@ -238,4 +238,43 @@ void processQMTClientDisconnected(String message)
   {
     Serial.println("Unknown error");
   }
+}
+
+bool sendATCheckOK(String command, String response)
+{
+  // Send and Check AT OK
+  int tries = 0;
+  int max_tries = 300;
+  ATSerial.println(command);
+  while (!ATSerial.find(response.c_str()) && tries < max_tries)
+  {
+    Serial.println("AT NOT OK");
+    if (tries > max_tries)
+    {
+      Serial.println("AT NOT OK - Max Tries reached");
+      ATSerial.println("AT+QPOWD=1");
+      tries = 0;
+      delay(10000);
+    }
+    delay(100);
+  }
+  return true;
+}
+
+void setupMQTT()
+{
+  // Send AT and check intial connection is OK
+  if(!sendATCheckOK("AT", "OK")){
+    setupMQTT();
+    return;
+  }
+
+  // Check for Network
+  if(!sendATCheckOK("AT+QNWINFO", "OK")){
+    setupMQTT();
+    return;
+  }
+
+
+
 }

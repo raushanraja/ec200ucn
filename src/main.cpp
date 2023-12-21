@@ -17,11 +17,9 @@
 void task1(void *parameter);
 void task2(void *parameter);
 
-
 // Queues for inter-task communication
 QueueHandle_t queue1;
 QueueHandle_t queue2;
-
 
 struct QueueData
 {
@@ -30,7 +28,6 @@ struct QueueData
 };
 
 bool task2Started = false;
-
 
 void sendToQueue(QueueHandle_t queue, const char *msg, int len)
 {
@@ -220,11 +217,25 @@ void task2(void *parameter)
         update.length = response.length() + 1; // +1 for null terminator
         strncpy(update.message, response.c_str(), MESSAGE_LENGTH);
         update.message[MESSAGE_LENGTH - 1] = '\0'; // Ensure null-terminated
-        xQueueSend(queue1, &update, portMAX_DELAY);
         // Send response to Task 1 via Queue 1
+        xQueueSend(queue1, &update, portMAX_DELAY);
+
+        // Check if respone if in PublisableATCommands
+        for (int i = 0; i < sizeof(PublishableATCommands) / sizeof(PublishableATCommands[0]); i++)
+        {
+          if (response.startsWith(PublishableATCommands[i]))
+          {
+            Serial.println("Publishing AT command: " + response);
+            String pubmessage = mqttClient.publish(clientIdx, 0, 0, 0, "ATINFO", response.length() + 1);
+            Serial.println("Published message: " + pubmessage);
+            ATSerial.println(pubmessage);
+            delay(10);
+            ATSerial.println(response);
+          }
+        }
       }
     }
     sendTask2Started();
-    vTaskDelay(10); // Adjust delay as needed
+    vTaskDelay(100); // Adjust delay as needed
   }
 }

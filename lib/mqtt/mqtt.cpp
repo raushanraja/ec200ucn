@@ -67,9 +67,9 @@ String MQTT::subscribe(int clientIdx, int msgId, const char *topic, int qos)
     return "AT+QMTSUB=" + String(clientIdx) + "," + String(msgId) + ",\"" + String(topic) + "\"," + String(qos);
 }
 
-String MQTT::publish(int clientIdx, int msgId, int qos, int retained, const char *topic, const char *payload)
+String MQTT::publish(int clientIdx, int msgId, int qos, int retained, const char *topic, int length)
 {
-    return "AT+QMTPUB=" + String(clientIdx) + "," + String(msgId) + "," + String(qos) + "," + String(retained) + ",\"" + String(topic) + "\",\"" + String(payload) + "\"";
+    return "AT+QMTPUBEX=" + String(clientIdx) + "," + String(msgId) + "," + String(qos) + "," + String(retained) + ",\"" + String(topic) + "\","+ String(length);
 }
 
 void MQTT::receiveMessage(int clientIdx, int recvId)

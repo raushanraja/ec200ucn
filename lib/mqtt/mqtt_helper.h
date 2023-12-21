@@ -36,6 +36,9 @@ enum LastATCommand
   QMTPUBEX,
 };
 
+
+String PublishableATCommands[] = {  "+QNWINFO", "+CSQ", "+QCSQ", "+QSPN" };
+
 LastATCommand lastATCommand = LastATCommand::AT;
 
 void openConnection();
@@ -49,5 +52,6 @@ void processQMTCLOSE(String message);
 void processQMTCONNRET(String ret_code);
 void processQMTCONN(String message);
 void processQMTClientDisconnected(String message);
+void setupMQTT();
 
 #endif

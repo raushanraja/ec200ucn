@@ -30,7 +30,7 @@ public:
     String openNetwork(int clientIdx, const char *hostName, int port);
     String connClient(int clientIdx, const char *clientID, char *user, char *password);
     String subscribe(int clientIdx, int msgId, const char *topic, int qos);
-    String publish(int clientIdx, int msgId, int qos, int retained, const char *topic, const char *payload);
+    String publish(int clientIdx, int msgId, int qos, int retained, const char *topic, int length);
     void receiveMessage(int clientIdx, int recvId);
     String disconnectClient(int clientIdx);
     String closeConnection(int clientIdx);
