@@ -47,6 +47,76 @@ void sendTask2Started()
   }
 }
 
+void handleOKResponse()
+{
+  switch (lastATCommand)
+  {
+  case LastATCommand::AT:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending AT");
+    lastATCommand = LastATCommand::QMTCFG_VERSION;
+    ATSerial.println(mqttClient.configureProtocolVersion(clientIdx, "3"));
+    break;
+  case LastATCommand::QMTCFG_VERSION:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTCFG");
+    lastATCommand = LastATCommand::QMTCFG_SSLENABLE;
+    ATSerial.println(mqttClient.configureSSLEnable(clientIdx, true, String(ssl_ctx_id)));
+    break;
+  case LastATCommand::QMTCFG_SSLENABLE:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTCFG");
+    lastATCommand = LastATCommand::QMTCFG_RECV;
+    ATSerial.println(mqttClient.configureRecvMode(clientIdx, "0", "1"));
+    break;
+  case LastATCommand::QMTCFG_RECV:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTCFG");
+    lastATCommand = LastATCommand::QSSLCFG_SSLVER;
+    ATSerial.println(mqttClient.configureSSLVersion(ssl_ctx_id, "4"));
+    break;
+  case LastATCommand::QSSLCFG_SSLVER:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_SSLVER");
+    lastATCommand = LastATCommand::QSSLCFG_CIPHER;
+    ATSerial.println(mqttClient.configureSSLCipher(ssl_ctx_id, "0XFFFF"));
+    break;
+  case LastATCommand::QSSLCFG_CIPHER:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_CIPHER");
+    lastATCommand = LastATCommand::QSSLCFG_SECLEVEL;
+    ATSerial.println(mqttClient.configureSSLSecLever(ssl_ctx_id, 0));
+    break;
+  case LastATCommand::QSSLCFG_SECLEVEL:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_SECLEVEL");
+    lastATCommand = LastATCommand::QSSLCFG_CACERT;
+    ATSerial.println(mqttClient.configureSSLCert(ssl_ctx_id, SSL_CERT_NAME));
+    break;
+  case LastATCommand::QSSLCFG_CACERT:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_CACERT");
+    lastATCommand = LastATCommand::QSSLCFG_IGNOREINVALID;
+    ATSerial.println(mqttClient.configureSSLIgnoreInValidCert(ssl_ctx_id, true));
+    break;
+  case LastATCommand::QSSLCFG_IGNOREINVALID:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_IGNOREINVALID");
+    lastATCommand = LastATCommand::QSSLCFG_SNI;
+    ATSerial.println(mqttClient.configureSSLSNI(ssl_ctx_id, "1"));
+    break;
+  case LastATCommand::QSSLCFG_SNI:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_SNI");
+    lastATCommand = LastATCommand::QMTOPEN;
+    openConnection();
+    break;
+  case LastATCommand::QMTOPEN:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTOPEN");
+    lastATCommand = LastATCommand::QMTCONN;
+    break;
+  case LastATCommand::QMTCLOSE:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTCLOSE");
+    lastATCommand = LastATCommand::QMTOPEN;
+    openConnection();
+    break;
+  case LastATCommand::QMTDISC:
+    Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTDISC");
+  default:
+    break;
+  }
+}
+
 void setup()
 {
   // Initialize Serial for debugging
@@ -94,78 +164,9 @@ void task1(void *parameter)
       }
       // check if it start with +CREG or +CEREG
       else if (message.startsWith("+CREG") || message.startsWith("+CGREG"))
-      {
         Serial.println("Received +CREG or +CGuREG from Task 2 via Queue 1");
-      }
       else if (message.startsWith("OK"))
-      {
-        switch (lastATCommand)
-        {
-        case LastATCommand::AT:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending AT");
-          lastATCommand = LastATCommand::QMTCFG_VERSION;
-          ATSerial.println(mqttClient.configureProtocolVersion(clientIdx, "3"));
-          break;
-        case LastATCommand::QMTCFG_VERSION:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTCFG");
-          lastATCommand = LastATCommand::QMTCFG_SSLENABLE;
-          ATSerial.println(mqttClient.configureSSLEnable(clientIdx, true, String(ssl_ctx_id)));
-          break;
-        case LastATCommand::QMTCFG_SSLENABLE:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTCFG");
-          lastATCommand = LastATCommand::QMTCFG_RECV;
-          ATSerial.println(mqttClient.configureRecvMode(clientIdx, "0", "1"));
-          break;
-        case LastATCommand::QMTCFG_RECV:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTCFG");
-          lastATCommand = LastATCommand::QSSLCFG_SSLVER;
-          ATSerial.println(mqttClient.configureSSLVersion(ssl_ctx_id, "4"));
-          break;
-        case LastATCommand::QSSLCFG_SSLVER:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_SSLVER");
-          lastATCommand = LastATCommand::QSSLCFG_CIPHER;
-          ATSerial.println(mqttClient.configureSSLCipher(ssl_ctx_id, "0XFFFF"));
-          break;
-        case LastATCommand::QSSLCFG_CIPHER:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_CIPHER");
-          lastATCommand = LastATCommand::QSSLCFG_SECLEVEL;
-          ATSerial.println(mqttClient.configureSSLSecLever(ssl_ctx_id, 0));
-          break;
-        case LastATCommand::QSSLCFG_SECLEVEL:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_SECLEVEL");
-          lastATCommand = LastATCommand::QSSLCFG_CACERT;
-          ATSerial.println(mqttClient.configureSSLCert(ssl_ctx_id, SSL_CERT_NAME));
-          break;
-        case LastATCommand::QSSLCFG_CACERT:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_CACERT");
-          lastATCommand = LastATCommand::QSSLCFG_IGNOREINVALID;
-          ATSerial.println(mqttClient.configureSSLIgnoreInValidCert(ssl_ctx_id, true));
-          break;
-        case LastATCommand::QSSLCFG_IGNOREINVALID:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_IGNOREINVALID");
-          lastATCommand = LastATCommand::QSSLCFG_SNI;
-          ATSerial.println(mqttClient.configureSSLSNI(ssl_ctx_id, "1"));
-          break;
-        case LastATCommand::QSSLCFG_SNI:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QSSLCFG_SNI");
-          lastATCommand = LastATCommand::QMTOPEN;
-          openConnection();
-          break;
-        case LastATCommand::QMTOPEN:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTOPEN");
-          lastATCommand = LastATCommand::QMTCONN;
-          break;
-        case LastATCommand::QMTCLOSE:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTCLOSE");
-          lastATCommand = LastATCommand::QMTOPEN;
-          openConnection();
-          break;
-        case LastATCommand::QMTDISC:
-          Serial.println("Received OK from Task 2 via Queue 1 for Sending QMTDISC");
-        default:
-          break;
-        }
-      }
+        handleOKResponse();
       else if (message.startsWith("+QMTRECV"))
         processQMTRECV(message);
       else if (message.startsWith("+QMTOPEN"))
@@ -179,9 +180,7 @@ void task1(void *parameter)
       else if (message.startsWith("+QMTCLOSE"))
         processQMTCLOSE(message);
       else
-      {
         Serial.println("Received update from Task 2 via Queue 1: " + String(update.message));
-      }
       // Process updates received from Task 2
       // Add your processing logic here
     }
